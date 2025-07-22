@@ -1,6 +1,6 @@
 import streamlit as st
 from pytube import YouTube
-from moviepy.editor import VideoFileClip
+from pydub import AudioSegment
 from faster_whisper import WhisperModel
 from transformers import pipeline
 import os
@@ -37,10 +37,10 @@ if st.button("Generate Questions from Video") and video_path:
     try:
         st.info("Extracting audio...")
 
-        # ✅ Extract audio using MoviePy (no ffmpeg or pydub needed)
+        # Extract audio using pydub
         audio_path = video_path.replace(".mp4", ".wav")
-        video_clip = VideoFileClip(video_path)
-        video_clip.audio.write_audiofile(audio_path)
+        audio = AudioSegment.from_file(video_path, format="mp4")
+        audio.export(audio_path, format="wav")
 
         st.success("Audio extracted.")
 
