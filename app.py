@@ -1,11 +1,12 @@
 import streamlit as st
 from pytube import YouTube
-from pydub import AudioSegment
+import ffmpeg
 from faster_whisper import WhisperModel
 from transformers import pipeline
 import os
+import subprocess
 
-st.title("🎥 Video Q&A Agent (Free & Public)")
+st.title("🎥 Video Q&A Agent")
 
 option = st.radio("Choose video source:", ["Upload video", "Paste YouTube Link"])
 video_path = ""
@@ -35,12 +36,10 @@ if video_path and os.path.exists(video_path):
 
 if st.button("Generate Questions from Video") and video_path:
     try:
-        st.info("Extracting audio...")
+        st.info("Extracting audio with ffmpeg...")
 
-        # Extract audio using pydub
         audio_path = video_path.replace(".mp4", ".wav")
-        audio = AudioSegment.from_file(video_path, format="mp4")
-        audio.export(audio_path, format="wav")
+        subprocess.run(['ffmpeg', '-i', video_path, audio_path], check=True)
 
         st.success("Audio extracted.")
 
