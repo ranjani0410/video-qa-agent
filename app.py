@@ -1,10 +1,9 @@
 import streamlit as st
 from pytube import YouTube
-import ffmpeg
 from faster_whisper import WhisperModel
 from transformers import pipeline
-import os
 import subprocess
+import os
 
 st.title("🎥 Video Q&A Agent")
 
