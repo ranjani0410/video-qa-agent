@@ -16,6 +16,7 @@ def download_video_audio(video_url):
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
 
+
 # Function to transcribe audio using faster-whisper
 def transcribe_audio(audio_path):
     try:
