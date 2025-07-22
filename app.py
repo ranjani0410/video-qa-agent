@@ -1,77 +1,73 @@
 import streamlit as st
-from pytube import YouTube
-from faster_whisper import WhisperModel
-from transformers import pipeline
+import subprocess
 import os
+import whisper
+import time
 
-# 1. Function to download audio from YouTube
+# Title
+st.title("🎥 Video Q&A Agent")
+st.markdown("Upload a YouTube video URL. We'll transcribe it and generate questions!")
+
+# Input field
+video_url = st.text_input("Enter YouTube video URL")
+
+# Function to download audio using yt-dlp
 def download_video_audio(url):
     try:
-        yt = YouTube(url)
-        audio_stream = yt.streams.filter(only_audio=True).first()
-        if audio_stream is None:
-            st.error("⚠ No audio stream found.")
-            return None
-        audio_file = "downloaded_audio.mp4"
-        audio_stream.download(filename=audio_file)
-        return audio_file
+        audio_file = "downloaded_audio.%(ext)s"
+        command = [
+            "yt-dlp",
+            "-x", "--audio-format", "mp3",
+            "-o", audio_file,
+            url
+        ]
+        subprocess.run(command, check=True)
+        return "downloaded_audio.mp3"
     except Exception as e:
         st.error(f"Error downloading audio: {e}")
         return None
 
-# 2. Function to transcribe audio using Whisper
-def transcribe_audio_whisper(audio_file):
+# Function to transcribe audio using Whisper
+def transcribe_audio(audio_path):
     try:
-        model = WhisperModel("base", device="cpu", compute_type="int8")
-        segments, _ = model.transcribe(audio_file)
-        transcript = " ".join(segment.text for segment in segments)
-        return transcript
+        model = whisper.load_model("base")
+        result = model.transcribe(audio_path)
+        return result["text"]
     except Exception as e:
         st.error(f"Error in transcription: {e}")
         return None
 
-# 3. Function to generate questions using HuggingFace pipeline
-def generate_questions_from_text(text):
-    try:
-        qa_pipeline = pipeline("question-generation")
-        questions = qa_pipeline(text)
-        return [q['question'] for q in questions]
-    except Exception as e:
-        st.error(f"Error generating questions: {e}")
-        return []
+# Placeholder for generated questions
+def generate_questions(transcript):
+    st.markdown("### ✨ Sample Questions (via Gemini)")
+    st.info("Note: Questions will be generated using Gemini in your backend.")
 
-# 4. Streamlit UI
-st.title("🎥 Video Q&A Chatbot Agent")
+    # Simulated placeholders for now:
+    st.write("- What is the main topic of the video?")
+    st.write("- What examples were discussed?")
+    st.write("- What is the conclusion of the video?")
 
-video_url = st.text_input("Paste YouTube Video URL")
+    # You can replace above with actual Gemini API call logic
+    # Or paste questions from your external Gemini script
 
-if st.button("Generate Q&A"):
-    if not video_url:
-        st.warning("Please paste a YouTube video URL.")
-    else:
-        st.info("🔄 Downloading audio...")
-        audio_path = download_video_audio(video_url)
+# Main logic
+if video_url:
+    st.info("⏳ Downloading audio from the video...")
+    audio_path = download_video_audio(video_url)
 
-        if audio_path and os.path.exists(audio_path):
-            st.success("✅ Audio downloaded successfully!")
-            st.info("🧠 Transcribing audio...")
-            transcript = transcribe_audio_whisper(audio_path)
+    if audio_path and os.path.exists(audio_path):
+        st.success("✅ Audio downloaded successfully!")
 
-            if transcript:
-                st.success("✅ Transcription complete!")
-                st.write("**Transcript:**")
-                st.write(transcript)
+        st.info("🎧 Transcribing audio using Whisper...")
+        transcript = transcribe_audio(audio_path)
 
-                st.info("🧾 Generating questions...")
-                questions = generate_questions_from_text(transcript)
+        if transcript:
+            st.success("✅ Transcription completed!")
+            st.markdown("### 📝 Transcript")
+            st.write(transcript)
 
-                if questions:
-                    st.success("✅ Questions generated!")
-                    for i, q in enumerate(questions, 1):
-                        st.write(f"**Q{i}:** {q}")
-                else:
-                    st.warning("No questions generated.")
-            else:
-                st.warning("⚠ Audio transcription failed.")
+            generate_questions(transcript)
         else:
-            st.warning("⚠ Audio file not found. Transcription skipped.")
+            st.warning("⚠ Transcription failed.")
+    else:
+        st.warning("⚠ Audio file not found. Transcription skipped.")
