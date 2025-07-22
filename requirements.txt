@@ -1,7 +1,8 @@
-streamlit
-pytube
-pydub
-faster-whisper
-transformers
-torch
-sentencepiece
+streamlit==1.35.0
+pytube==15.0.0
+pydub==0.25.1
+faster-whisper==0.10.0
+transformers==4.41.1
+torch==2.3.0
+sentencepiece==0.2.0
+numpy==1.26.4
