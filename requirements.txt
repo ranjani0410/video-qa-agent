@@ -1,0 +1,7 @@
+streamlit
+pytube
+moviepy
+faster-whisper
+torch
+torchaudio
+transformers
