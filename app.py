@@ -21,13 +21,25 @@ def transcribe_audio(audio_path):
 st.title("🎧 Video Q&A Agent")
 video_url = st.text_input("Enter YouTube video URL:")
 
+video_url = st.text_input("Enter YouTube video URL")
+
 if video_url:
-    with st.spinner("Downloading audio..."):
-        try:
+    try:
+        with st.spinner("Downloading audio..."):
             audio_path = download_video_audio(video_url)
-            st.success("Audio downloaded successfully.")
+            st.success("Audio downloaded!")
+    except Exception as e:
+        st.error(f"Error downloading audio: {e}")
+        audio_path = None
+
+    if audio_path:
+        try:
+            with st.spinner("Transcribing..."):
+                transcription = transcribe_audio(audio_path)
+                st.success("Transcription completed!")
+                st.text_area("Transcript", transcription, height=300)
         except Exception as e:
-            st.error(f"Error downloading audio: {e}")
+            st.error(f"Error in transcription: {e}")
 
     with st.spinner("Transcribing..."):
         try:
