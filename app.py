@@ -1,91 +1,69 @@
 import streamlit as st
-import tempfile
+import subprocess
 import os
-import yt_dlp
 import whisper
-import requests
+import google.generativeai as genai
 
-# Gemini API setup
-GEMINI_API_KEY = "AIzaSyCttlItCvXn5QYuFabAHuHrICddtMBBP7M"
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY
+# Set your Gemini API key here
+GEMINI_API_KEY = "AIzaSyDbBMZAZfCHp8fhqdw7-DXI9PQqwbtkJ4E"
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Step 1: Download audio
-def download_video_audio(video_url):
-    try:
-        st.info("⏳ Downloading audio from the video...")
-        temp_audio_file = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': temp_audio_file.name,
-            'quiet': True,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-
-        st.success("✅ Audio downloaded successfully!")
-        return temp_audio_file.name
-    except Exception as e:
-        st.error(f"Error downloading audio: {e}")
-        return None
-
-# Step 2: Transcribe with Whisper
-def transcribe_audio(audio_path):
-    try:
-        st.info("🎧 Transcribing audio using Whisper...")
-        model = whisper.load_model("base")
-        result = model.transcribe(audio_path)
-        st.success("✅ Transcription completed.")
-        return result["text"]
-    except Exception as e:
-        st.error(f"Error in transcription: {e}")
-        return None
-
-# Step 3: Generate questions using Gemini
-def generate_questions_from_text(text):
-    st.info("🧠 Generating questions using Gemini Pro...")
-    headers = {"Content-Type": "application/json"}
-    prompt = f"Generate 5 simple and useful questions based on the following transcript:\n\n{text}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-
-    try:
-        response = requests.post(GEMINI_API_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        parts = response.json()["candidates"][0]["content"]["parts"]
-        questions = parts[0]["text"].split('\n')
-        st.success("✅ Questions generated.")
-        return [q.strip() for q in questions if q.strip()]
-    except Exception as e:
-        st.error(f"Error generating questions: {e}")
-        return []
-
-# Streamlit UI
+st.set_page_config(page_title="Video Q&A Agent", layout="centered")
 st.title("🎥 Video Q&A Agent")
-video_url = st.text_input("Enter YouTube Video URL")
+st.markdown("Transcribe YouTube video audio and generate questions using Gemini.")
 
-if st.button("🔍 Process Video"):
-    if video_url:
-        audio_path = download_video_audio(video_url)
-        if audio_path:
-            transcript = transcribe_audio(audio_path)
-            if transcript:
-                st.subheader("📝 Transcript")
-                st.write(transcript)
+youtube_url = st.text_input("Enter YouTube Video URL:")
 
-                questions = generate_questions_from_text(transcript)
+if st.button("Transcribe and Generate Questions"):
+    if youtube_url:
+        st.info("🔽 Downloading audio from YouTube...")
+        try:
+            result = subprocess.run(
+                ["yt-dlp", "-x", "--audio-format", "mp3", youtube_url],
+                capture_output=True, text=True
+            )
+            output = result.stdout + result.stderr
+
+            audio_file = None
+            for line in output.splitlines():
+                if "Destination:" in line and line.strip().endswith(".mp3"):
+                    audio_file = line.split("Destination: ")[-1].strip()
+                    break
+                elif "has already been downloaded" in line and line.strip().endswith(".mp3"):
+                    audio_file = line.split("]")[-1].strip()
+                    break
+
+            if audio_file and os.path.exists(audio_file):
+                st.success(f"✅ Audio ready: `{audio_file}`")
+
+                # Transcribe using Whisper
+                st.info("🧠 Transcribing audio using Whisper...")
+                model = whisper.load_model("base")
+                result = model.transcribe(audio_file)
+                transcript = result["text"]
+
+                # Show transcription
+                st.subheader("📄 Transcription Result")
+                st.text_area("Transcript:", transcript, height=250)
+
+                # Generate questions using Gemini
+                st.info("🧠 Generating questions using Gemini Pro...")
+
+                prompt = (
+                    "You are an AI that generates quiz-style questions for video learners. "
+                    "Given this transcript, generate a list of 5-7 relevant and thoughtful questions:\n\n"
+                    f"{transcript}\n\n"
+                    "Return only the questions, numbered."
+                )
+
+                model = genai.GenerativeModel("gemini-pro")
+                response = model.generate_content(prompt)
+
                 st.subheader("❓ Generated Questions")
-                for i, q in enumerate(questions, 1):
-                    st.write(f"{i}. {q}")
+                st.text_area("Questions:", response.text, height=250)
             else:
-                st.warning("⚠ Transcription failed.")
-        else:
-            st.warning("⚠ Audio file not found. Transcription skipped.")
+                st.error("❌ Audio download failed. Please check the YouTube URL.")
+        except Exception as e:
+            st.error(f"❌ An error occurred: {e}")
     else:
-        st.warning("⚠ Please enter a valid YouTube video URL.")
+        st.warning("⚠️ Please enter a valid YouTube URL.")
