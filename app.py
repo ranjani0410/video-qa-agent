@@ -1,69 +1,51 @@
-import streamlit as st
-import subprocess
-import os
+from flask import Flask, request, jsonify
+from pytube import YouTube
+from moviepy.editor import VideoFileClip
 import whisper
-import google.generativeai as genai
+import os
+import requests
 
-# Set your Gemini API key here
-GEMINI_API_KEY = "AIzaSyDbBMZAZfCHp8fhqdw7-DXI9PQqwbtkJ4E"
-genai.configure(api_key=GEMINI_API_KEY)
+app = Flask(__name__)
+model = whisper.load_model("base")
 
-st.set_page_config(page_title="Video Q&A Agent", layout="centered")
-st.title("🎥 Video Q&A Agent")
-st.markdown("Transcribe YouTube video audio and generate questions using Gemini.")
+@app.route('/generate-qa', methods=['POST'])
+def generate_qa():
+    data = request.json
+    video_url = data.get("url")
 
-youtube_url = st.text_input("Enter YouTube Video URL:")
+    # Download video
+    yt = YouTube(video_url)
+    video_path = yt.streams.filter(only_audio=True).first().download(filename="video.mp4")
 
-if st.button("Transcribe and Generate Questions"):
-    if youtube_url:
-        st.info("🔽 Downloading audio from YouTube...")
-        try:
-            result = subprocess.run(
-                ["yt-dlp", "-x", "--audio-format", "mp3", youtube_url],
-                capture_output=True, text=True
-            )
-            output = result.stdout + result.stderr
+    # Extract audio
+    clip = VideoFileClip("video.mp4")
+    clip.audio.write_audiofile("audio.mp3")
 
-            audio_file = None
-            for line in output.splitlines():
-                if "Destination:" in line and line.strip().endswith(".mp3"):
-                    audio_file = line.split("Destination: ")[-1].strip()
-                    break
-                elif "has already been downloaded" in line and line.strip().endswith(".mp3"):
-                    audio_file = line.split("]")[-1].strip()
-                    break
+    # Transcribe
+    result = model.transcribe("audio.mp3")
+    transcript = result["text"]
 
-            if audio_file and os.path.exists(audio_file):
-                st.success(f"✅ Audio ready: `{audio_file}`")
-
-                # Transcribe using Whisper
-                st.info("🧠 Transcribing audio using Whisper...")
-                model = whisper.load_model("base")
-                result = model.transcribe(audio_file)
-                transcript = result["text"]
-
-                # Show transcription
-                st.subheader("📄 Transcription Result")
-                st.text_area("Transcript:", transcript, height=250)
-
-                # Generate questions using Gemini
-                st.info("🧠 Generating questions using Gemini Pro...")
-
-                prompt = (
-                    "You are an AI that generates quiz-style questions for video learners. "
-                    "Given this transcript, generate a list of 5-7 relevant and thoughtful questions:\n\n"
-                    f"{transcript}\n\n"
-                    "Return only the questions, numbered."
-                )
-
-                model = genai.GenerativeModel("gemini-pro")
-                response = model.generate_content(prompt)
-
-                st.subheader("❓ Generated Questions")
-                st.text_area("Questions:", response.text, height=250)
-            else:
-                st.error("❌ Audio download failed. Please check the YouTube URL.")
-        except Exception as e:
-            st.error(f"❌ An error occurred: {e}")
-    else:
-        st.warning("⚠️ Please enter a valid YouTube URL.")
+    # Gemini API call
+    api_key = os.environ.get("GEMINI_API_KEY")
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": f"Generate 5 quiz questions with answers from the following transcript:\n{transcript}"
+                    }
+                ]
+            }
+        ]
+    }
+    response = requests.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+        headers=headers,
+        json=payload
+    )
+    questions = response.json()['candidates'][0]['content']['parts'][0]['text']
+    return jsonify({"questions": questions})
