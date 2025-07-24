@@ -1,4 +1,6 @@
-streamlit
-whisper
-yt-dlp
-torch
+flask
+pytube
+moviepy
+git+https://github.com/openai/whisper.git
+openai
+requests
